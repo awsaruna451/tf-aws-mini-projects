@@ -95,6 +95,3 @@ This is a meaningful upgrade over serving directly from a public S3 bucket — i
 - Enforcing HTTPS at the CDN layer
 - Managing multi-resource infrastructure as code with Terraform
 
-## License
-
-MIT
