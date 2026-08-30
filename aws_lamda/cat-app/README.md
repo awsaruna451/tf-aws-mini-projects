@@ -1,98 +1,99 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# NestJS API on AWS Lambda with Terraform
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A Terraform project that deploys a **NestJS** backend application to **AWS Lambda**, exposed via an **API Gateway HTTP API**.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Part of my Terraform + AWS learning journey.
 
-## Description
+## Architecture
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
+```
+Client → API Gateway (HTTP API) → Lambda (NestJS app) → CloudWatch Logs
 ```
 
-## Compile and run the project
+**Resources created:**
+- `aws_iam_role` + policy attachment — Lambda execution role with basic execution permissions
+- `aws_cloudwatch_log_group` — log group for the Lambda function
+- `aws_lambda_function` — runs the NestJS app (Node.js runtime)
+- `aws_apigatewayv2_api` — HTTP API (cheaper/simpler than REST API)
+- `aws_apigatewayv2_integration` — Lambda proxy integration
+- `aws_apigatewayv2_route` — catch-all `$default` route so Nest's own router handles all paths/methods
+- `aws_apigatewayv2_stage` — auto-deploying stage named after the environment
+- `aws_lambda_permission` — allows API Gateway to invoke the Lambda function
 
-```bash
-# development
-$ npm run start
+Remote state is stored in S3 (see `backend.tf`), with native S3 locking enabled.
 
-# watch mode
-$ npm run start:dev
+## Prerequisites
 
-# production mode
-$ npm run start:prod
+- [Terraform](https://developer.hashicorp.com/terraform/downloads) installed (v1.5+)
+- An AWS account
+- AWS CLI configured with credentials (`aws configure`)
+- Your NestJS app built and packaged as a Lambda-compatible zip (see below)
+
+## Project Structure
+
+```
+.
+├── backend.tf          # Remote state config (S3 backend)
+├── main.tf               # Lambda, IAM role, API Gateway resources
+├── variables.tf            # Input variable definitions
+├── outputs.tf                # API endpoint and Lambda outputs
+└── README.md
 ```
 
-## Run tests
+## Preparing the Lambda Package
+
+This project expects a pre-built zip at the path set in `lambda_zip_path` (default: `../lambda.zip`), containing your compiled NestJS app with a Lambda handler at `dist/lambda.handler`. Typically this means using a package like `@vendia/serverless-express` or `aws-lambda` adapter to wrap your Nest app, then zipping the `dist/` and `node_modules/` folders.
+
+## Variables
+
+| Name                    | Description                                | Default              |
+|--------------------------|----------------------------------------------|------------------------|
+| `environment`             | Deployment environment (dev/staging/prod)      | `dev`                    |
+| `app_name`                 | Base app name, used in resource naming           | `cat-app`                  |
+| `aws_region`                 | AWS region to deploy into                          | `us-east-1`                  |
+| `lambda_zip_path`             | Path to the zipped Lambda package                    | `../lambda.zip`                 |
+| `handler`                       | Lambda handler (`file.export` form)                     | `dist/lambda.handler`             |
+| `runtime`                          | Lambda runtime                                             | `nodejs20.x`                        |
+| `memory_size`                        | Memory allocated to the function (MB)                        | `512`                                  |
+| `timeout`                               | Function timeout (seconds)                                       | `30`                                      |
+| `environment_variables`                   | Extra env vars passed to the Lambda at runtime                      | `{}`                                          |
+| `log_retention_days`                         | CloudWatch log retention (days)                                        | `14`                                              |
+| `tags`                                          | Extra tags merged into all resources                                       | `{}`                                                  |
+
+## Usage
+
+1. **Clone the repository**
+   ```bash
+   git clone <your-repo-url>
+   cd <repo-folder>
+   ```
+
+2. **Build and zip your NestJS app**, placing the output at the path set by `lambda_zip_path`.
+
+3. **Update `backend.tf`** with your own S3 state bucket name.
+
+4. **Initialize, plan, and apply**
+   ```bash
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+
+5. **Get the API endpoint**
+   ```bash
+   terraform output api_endpoint
+   ```
+
+## Cleanup
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+terraform destroy
 ```
 
-## Deployment
+## What I Learned
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+- Deploying a Node.js backend framework (NestJS) to Lambda behind API Gateway
+- Using API Gateway HTTP APIs with a Lambda proxy integration and catch-all routing
+- Managing Terraform remote state in S3 with native locking
+- Structuring reusable Terraform config across environments via variables
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
