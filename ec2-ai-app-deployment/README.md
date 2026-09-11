@@ -1,7 +1,8 @@
-# AI Agent Platform — Production Terraform (Multi-AZ, Auto Scaling)
+# AI Agent Platform on AWS (Multi-AZ, Auto Scaling, CloudWatch + SNS)
 
-Deploys a Dockerized AI agent stack (LangGraph agent + FastAPI + MCP server + React frontend)
-to EC2 behind an ALB, across multiple Availability Zones, with Auto Scaling and CloudWatch/SNS alerting.
+Deploys a Dockerized AI agent stack — chat frontend, AI agent backend, and MCP server — to EC2 across multiple Availability Zones, with Auto Scaling, CloudWatch monitoring, and SNS alerting.
+
+Part of my Terraform + AWS learning journey.
 
 ## Architecture
 
@@ -9,70 +10,77 @@ to EC2 behind an ALB, across multiple Availability Zones, with Auto Scaling and 
 Internet → ALB (multi-AZ, public subnets)
               │
               ▼
-   Auto Scaling Group (private subnets, 2+ AZs)
+   Auto Scaling Group (private subnets, multi-AZ)
    ┌─────────────────────────────────────┐
-   │  EC2 instance                        │
-   │  ├── nginx (reverse proxy, :80)       │
-   │  ├── frontend (React build)             │
-   │  ├── fastapi (:8000)                      │
-   │  ├── ai-agent (LangGraph, :8100)             │
-   │  └── mcp-server (:9000)                        │
+   │  EC2 instance (Docker containers)     │
+   │  ├── chat-fe        (frontend, :5173)  │
+   │  ├── chat-be         (ai-agent, :8001)  │
+   │  └── mcp-cal-server   (mcp-server, :8000)│
    └─────────────────────────────────────┘
-              │
-              ▼
-        RDS PostgreSQL (Multi-AZ, private subnets)
 
-  ECR (4 repos)   Secrets Manager   CloudWatch + SNS (CPU alarms → scale + email alert)
+  ECR (3 repos)   Secrets Manager   CloudWatch + SNS (CPU alarms → scale + email alert)
 ```
-
+## Application link
+    https://github.com/awsaruna451/langgraph-chat-project
 ## Modules
 
-| Module        | Purpose                                                              |
-|---------------|------------------------------------------------------------------------|
-| `network`     | VPC, public/private subnets across N AZs, IGW, NAT gateway(s)             |
-| `security`    | Security groups: ALB (public), app (ALB-only), RDS (app-only)               |
-| `ecr`         | 4 ECR repos: `ai-agent`, `fastapi`, `mcp-server`, `frontend`                   |
-| `secrets`     | Secrets Manager entry with DB creds + LLM API key                               |
-| `rds`         | Multi-AZ PostgreSQL instance                                                       |
-| `alb`         | Application Load Balancer + target group + HTTP/HTTPS listeners                       |
-| `asg`         | Launch template + Auto Scaling Group, spread across AZs, pulls images from ECR           |
-| `monitoring`  | CloudWatch CPU alarms wired to scaling policies + SNS email alerts                          |
+| Module       | Purpose                                                            |
+|--------------|----------------------------------------------------------------------|
+| `vpc`        | Multi-AZ VPC — public/private subnets across `az_count` AZs             |
+| `security`   | Security groups: ALB (public), app (ALB-only)                             |
+| `ecr`        | 3 ECR repos: `ai-agent`, `mcp-server`, `frontend`                            |
+| `secrets`    | Secrets Manager entry with LLM/API keys (OpenAI, Google, OpenWeather, AlphaVantage) |
+| `alb`        | Application Load Balancer + target group + HTTP/HTTPS listeners             |
+| `asg`        | Launch template + Auto Scaling Group, multi-AZ, self-healing container deploy on boot |
+| `monitoring` | CloudWatch CPU alarms wired to scaling policies + SNS email alerts           |
+
+RDS (Postgres) is scaffolded in the module but currently commented out — not yet part of the live deployment.
+
+## How deployment works
+
+- **GitHub Actions (OIDC, no stored AWS keys)** builds and pushes each service's image to its ECR repo, then triggers a redeploy via **SSM Send-Command** on running instances.
+- **Instance boot (`user_data`)** installs Docker, then runs the same deploy logic as CI — pulling the current `:latest` image for all three services and starting them as containers on a shared Docker network. This makes any freshly launched instance (scale-out, health-check replacement, instance refresh) self-healing and immediately correct, without waiting for the next push.
 
 ## Prerequisites
 
 - Terraform >= 1.5
 - AWS CLI configured
-- An S3 bucket for remote state (set in `versions.tf` backend block)
-- Docker images for all 4 services already built — or plan to push them to the ECR repos this creates (`terraform apply` creates the repos; push images before instances boot, or the ASG will fail to pull)
-- (Optional but recommended for production) an ACM certificate for HTTPS on the ALB
+- An S3 bucket for Terraform remote state
+- A GitHub OIDC-federated IAM setup (created by this config) so Actions can push to ECR and deploy via SSM
+- (Optional) an ACM certificate for HTTPS on the ALB
 
 ## Usage
 
 ```bash
-cd infra
-cp envs/prod.tfvars.example envs/prod.tfvars   # fill in real values
-
+cd envs/dev   # or your environment folder
 terraform init
-terraform plan  -var-file=envs/prod.tfvars
-terraform apply -var-file=envs/prod.tfvars
+terraform plan
+terraform apply
 ```
 
-After `apply`, build and push your 4 images to the ECR repos in the output, then either
-wait for the next scheduled instance refresh or trigger one manually:
+After `apply`, push images to the three ECR repos (via GitHub Actions or manually) — the ASG's bootstrap script will pull and run them automatically on instance launch, and each subsequent push redeploys via SSM without replacing the instance.
 
-```bash
-aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <ecr_registry>
-docker build -t <repo_url>:latest ./ai-agent && docker push <repo_url>:latest
-# repeat for fastapi, mcp-server, frontend
+## Monitoring
 
-aws autoscaling start-instance-refresh --auto-scaling-group-name <asg_name>
-```
+- **CPU-high** → scales out the ASG and sends an SNS email alert
+- **CPU-low** → scales in
+- **Unhealthy host count** → SNS alert if in-service instances drop below the configured minimum
 
-## Notes / Production Considerations
+## Notes
 
-- **Multi-AZ**: app instances and RDS both span `az_count` AZs (default 2). NAT Gateway is also one-per-AZ by default for full HA — set `single_nat_gateway = true` in the network module call to cut cost if full NAT redundancy isn't needed.
-- **Stateless instances**: app instances have no local persistent state — all durable data goes to RDS. This is what makes Auto Scaling safe.
-- **Instance refresh**: changing the launch template (new image tags, instance type, etc.) triggers a rolling replacement automatically.
-- **Secrets**: never bake API keys into the AMI or Docker image — they're injected at boot via Secrets Manager.
-- **HTTPS**: set `certificate_arn` to enable HTTPS on the ALB; without it, the ALB serves HTTP only.
-- **CI/CD next step**: wire image builds/pushes and `start-instance-refresh` into a pipeline (GitHub Actions, CodePipeline, etc.) instead of doing it manually.
+- Secrets (API keys) are pulled from Secrets Manager at container-start time — never baked into images.
+- Multi-AZ applies to the VPC and the ASG; RDS Multi-AZ will apply once the database module is enabled.
+- GitHub Actions authenticates via OIDC federation — no long-lived AWS access keys are stored in the repo.
+
+## What I Learned
+
+- Structuring a multi-service AI application (agent + MCP server + frontend) as independent containers on shared EC2 instances
+- Self-healing instance bootstrap that mirrors the CI/CD deploy path, so boot-time and push-time deploys never drift apart
+- Wiring CloudWatch alarms directly to Auto Scaling policies and SNS notifications
+- GitHub Actions → AWS via OIDC, avoiding stored credentials entirely
+
+<img src="aws_ar.png" alt="AWS AI Agent Platform Architecture" width="900"/>
+<img src="chat.png" alt="Ai chat application" width="900"/>
+<img src="mcp_log.png" alt="Mcp server log" width="900"/>
+
+
