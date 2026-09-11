@@ -20,8 +20,8 @@ Internet → ALB (multi-AZ, public subnets)
 
   ECR (3 repos)   Secrets Manager   CloudWatch + SNS (CPU alarms → scale + email alert)
 ```
-## Application link
-    https://github.com/awsaruna451/langgraph-chat-project
+## Application
+🔗 [GitHub Repository](https://github.com/awsaruna451/langgraph-chat-project/tree/dev)
 ## Modules
 
 | Module       | Purpose                                                            |
