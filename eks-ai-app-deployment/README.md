@@ -8,7 +8,18 @@ A GitOps-driven, Kubernetes-native AI chat platform: a React frontend, a Python/
 
 ## Architecture
 
-![Chat Application – EKS Architecture](./docs/architecture.png)
+![architecture.png](architecture.png)
+
+## Logs
+![logs.png](logs.png)
+
+## Monitoring
+
+![monitoring1.png](monitoring1.png)
+![monitoring2.png](monitoring2.png)
+
+## GitOps
+![argocd.png](argocd.png)
 
 **Deployment flow:**
 ```
@@ -171,13 +182,8 @@ A few non-obvious things learned operating this stack, worth keeping in mind:
 - [x] GitHub Actions OIDC (no long-lived AWS credentials)
 - [x] Prometheus + Grafana
 - [x] EFK logging stack
-- [ ] RDS (currently commented out in Terraform, pending)
 - [ ] HTTPS via a real domain + ACM-validated certificate
 - [ ] Autoscaling tuning (HPA / Cluster Autoscaler or Karpenter)
 - [ ] CI for pull requests (currently push-to-branch only)
 
----
 
-## License
-
-_Add your license here._
