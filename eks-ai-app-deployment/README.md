@@ -6,27 +6,6 @@ A GitOps-driven, Kubernetes-native AI chat platform: a React frontend, a Python/
 
 ---
 
-## Architecture
-
-![architecture.png](architecture.png)
-
-## Logs
-![logs.png](logs.png)
-
-## Monitoring
-
-![monitoring1.png](monitoring1.png)
-![monitoring2.png](monitoring2.png)
-
-## GitOps
-![argocd.png](argocd.png)
-
-## 🔗 GitHub Code artifact
-https://github.com/awsaruna451/langgraph-chat-project/tree/dev.01
-
-## Application
-![application.png](application.png)
-
 **Deployment flow:**
 ```
 GitHub → GitHub Actions → Amazon ECR → Argo CD → Helm → Amazon EKS
@@ -191,4 +170,24 @@ A few non-obvious things learned operating this stack, worth keeping in mind:
 - [ ] HTTPS via a real domain + ACM-validated certificate
 - [ ] CI for pull requests (currently push-to-branch only)
 
+## Architecture
+
+![architecture.png](architecture.png)
+
+## Logs
+![logs.png](logs.png)
+
+## Monitoring
+
+![monitoring1.png](monitoring1.png)
+![monitoring2.png](monitoring2.png)
+
+## GitOps
+![argocd.png](argocd.png)
+
+## 🔗 GitHub Code artifact
+https://github.com/awsaruna451/langgraph-chat-project/tree/dev.01
+
+## Application
+![application.png](application.png)
 
