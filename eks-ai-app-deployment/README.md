@@ -186,7 +186,6 @@ A few non-obvious things learned operating this stack, worth keeping in mind:
 - [x] Prometheus + Grafana
 - [x] EFK logging stack
 - [ ] HTTPS via a real domain + ACM-validated certificate
-- [ ] Autoscaling tuning (HPA / Cluster Autoscaler or Karpenter)
 - [ ] CI for pull requests (currently push-to-branch only)
 
 
