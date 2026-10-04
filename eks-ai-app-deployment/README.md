@@ -21,6 +21,9 @@ A GitOps-driven, Kubernetes-native AI chat platform: a React frontend, a Python/
 ## GitOps
 ![argocd.png](argocd.png)
 
+## 🔗 GitHub Code artifact
+https://github.com/awsaruna451/langgraph-chat-project/tree/dev.01
+
 **Deployment flow:**
 ```
 GitHub → GitHub Actions → Amazon ECR → Argo CD → Helm → Amazon EKS
