@@ -17,6 +17,9 @@ Applications → Prometheus → Grafana          (metrics)
 Applications → Fluent Bit → Elasticsearch → Kibana   (logs)
 ```
 
+## 🔗 GitHub Code artifact
+https://github.com/awsaruna451/langgraph-chat-project/tree/dev.01
+
 ### Components
 
 | Layer | Component | Purpose |
@@ -185,8 +188,6 @@ A few non-obvious things learned operating this stack, worth keeping in mind:
 ## GitOps
 ![argocd.png](argocd.png)
 
-## 🔗 GitHub Code artifact
-https://github.com/awsaruna451/langgraph-chat-project/tree/dev.01
 
 ## Application
 ![application.png](application.png)
